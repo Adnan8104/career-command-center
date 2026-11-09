@@ -484,18 +484,21 @@ export async function fillSession(
         const menu = '.select__menu .select__option, .select__menu-list [role="option"], [class*="menu" i] [role="option"], .ashby-application-form-input-autocomplete-popup-result, [role="listbox"] [role="option"]';
         // Greenhouse's location/school/degree/discipline selects and Ashby's location
         // field search remotely: the menu shows "Loading..." for ~1s before options
-        // arrive. Wait for them instead of giving up.
+        // arrive. Wait for a visible matching option instead of giving up. Visible
+        // only: some forms keep a hidden listbox in the DOM (e.g. Greenhouse's phone
+        // country-code picker) whose options would otherwise end the wait early.
+        const options = s.frame.locator(menu).filter({ visible: true });
         for (let waited = 0; waited < 5000; waited += 250) {
           await s.page.waitForTimeout(250);
-          if (await s.frame.locator(menu).count()) break;
+          if (await options.filter({ hasText: new RegExp(esc, "i") }).count()) break;
         }
-        const exact = s.frame.locator(menu).filter({ hasText: new RegExp(`^\\s*${esc}\\s*$`, "i") }).first();
+        const exact = options.filter({ hasText: new RegExp(`^\\s*${esc}\\s*$`, "i") }).first();
         if (await exact.count()) {
           await exact.click();
         } else {
           // fall back to the first option that contains the typed text; else give
           // up (Escape closes the menu) — leave it for the human, never submit.
-          const partial = s.frame.locator(menu).filter({ hasText: new RegExp(esc, "i") }).first();
+          const partial = options.filter({ hasText: new RegExp(esc, "i") }).first();
           if (await partial.count()) await partial.click();
           else {
             await s.page.keyboard.press("Escape").catch(() => {});
